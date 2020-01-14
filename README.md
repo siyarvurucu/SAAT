@@ -1,5 +1,5 @@
 # Sound-Annotator
-Python sound annotator GUI
+Python sound annotator
 
 Create labels using "Add label" button   
 Press numbers on keyboard to select corresponding label    
