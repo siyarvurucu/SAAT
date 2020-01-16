@@ -15,13 +15,13 @@ Spacebar: Play/Stop
 "X" Discard lastly added annotation  
 
 __Issues:__ 
-Ugly
-Not-thread safe: Spamming Play/Stop button very quick may freeze program
-Loading existing annotations (from folder) is not implemented.
-Home, Backward, Forward buttons are not working due to blitting. Requires a modification in NavigationToolbar2tk (of matplotlib.backends) 
+Ugly  
+Not-thread safe: Spamming Play/Stop button very quick may freeze program  
+Loading existing annotations (from folder) is not implemented.  
+Home, Backward, Forward buttons are not working due to blitting. Requires a modification in NavigationToolbar2tk (of matplotlib.backends)     
 
-__Upcoming:__
-Use of arrow keys to fine tune timestamps
-Looping between two time points
-Spectogram
-Support other file formats
+__Upcoming:__  
+Use of arrow keys to fine tune timestamps  
+Looping between two time points  
+Spectogram  
+Support other file formats  
