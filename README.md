@@ -9,10 +9,10 @@ Use "Save&Load Next" button to save annotations to text files. It will also load
 Annotations will be saved in seperate (for each label) .txt files, In JSON string format.  
 
 
-"1, 2, 3, ..." Select label.
-"Esc" : Release label
-Spacebar: Play/Stop
-"X" Discard last annotations
+"1, 2, 3, ..." Select label.  
+"Esc" : Release label  
+Spacebar: Play/Stop  
+"X" Discard last annotations  
 
 __Issues:__ 
 Ugly
