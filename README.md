@@ -12,7 +12,7 @@ Annotations will be saved in seperate (for each label) .txt files, In JSON strin
 "1, 2, 3, ..." Select label.  
 "Esc" : Release label  
 Spacebar: Play/Stop  
-"X" Discard last annotations  
+"X" Discard lastly added annotation  
 
 __Issues:__ 
 Ugly
