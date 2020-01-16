@@ -1,5 +1,5 @@
 import sys, os
-import IPython.display as ipd
+import asyncio
 import matplotlib
 import matplotlib.pyplot as plt
 import numpy as np
@@ -8,11 +8,11 @@ import wave
 import json
 
 import tkinter as tk
-from tkinter import *   
+from tkinter import *
 from tkinter import filedialog as tkFileDialog
 from tkinter import messagebox as tkMessageBox
 
-from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2TkAgg
+from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.backend_bases import Event
 
 class Annotator:
@@ -28,8 +28,12 @@ class Annotator:
         self.stamp = -1  
         self.stampHistory = []
         
+        self.chunk_size=2048
+        
+        self.sem = asyncio.Semaphore()
+
         # Info text
-        self.info = tk.StringVar()
+        self.info = StringVar()
         self.info.set("welcome")        
         self.info_widget = Message(self.parent, textvariable=self.info, width=150)
         self.info_widget.grid(row=1,column=2)
@@ -41,7 +45,6 @@ class Annotator:
         options['initialdir'] = os.getcwd()
         if (options['initialdir'][-1] != '/'):
             options['initialdir'] += '/'
-        os.chdir("/")
         
         # BUTTON TO SET DIRECTORY
         self.directory_button = Button(self.parent, text="Directory", command=self.set_directory)
@@ -52,7 +55,7 @@ class Annotator:
         self.filelocation["width"] = 25
         self.filelocation.grid(row=0,column=0, sticky=W, padx=10)
         self.filelocation.delete(0, END)
-        self.filename = '156_recording-0-2019-03-11T22-43-27-893Z-0.wav' # initial file
+        self.filename = '' # initial file
         self.filelocation.insert(0, self.file_opt['initialdir']+self.filename)
         
         
@@ -63,15 +66,15 @@ class Annotator:
         #BUTTON TO PLOT SOUND FILE
         self.preview = Button(self.parent, text="Plot", command=self.plot, bg="gray30", fg="white")
         self.preview.grid(row=0, column=1, sticky=W)
-        
+               
         #BUTTON TO PLAY/STOP , shortcut: spacebar
         self.play_mode = tk.BooleanVar(self.parent, False)
         self.new_sound =tk.BooleanVar(self.parent, False)
         self.playbutton = Button(self.parent, text="Play", command=self.playsound)
-        self.playbutton.grid(row=0, column=2, sticky=W)
+        self.playbutton.grid(row=0, column=2, sticky=W)#, padx=(800, 6))
         self.parent.bind("<space>",self.playsound)
         
-        ###### BUTTON TO SAVE AND LOAD NEXT SOUND FILE 
+        #BUTTON TO SAVE AND LOAD NEXT SOUND FILE 
         self.saveload = Button(self.parent, text="Save& Load Next", command=self.saveAndNext) 
         self.saveload.grid(row=0, column=3, sticky=W)
         
@@ -83,29 +86,25 @@ class Annotator:
         self.discardbutton = Button(self.parent, text="Discard", command=self.discard)
         self.discardbutton.grid(row=0,column=4, sticky=W)
         
-        #BUTTON TO GET NEXT SOUND FROM FOLDER
+        #BUTTON TO get next
         self.load_next = Button(self.parent, text="Next Sound", command=self.getNext) 
         self.load_next.grid(row=1, column=0, sticky=W, padx=(220,6)) 
-        
-                
+              
         # BUTTON TO QUIT 
         self.quitbutton = Button(self.parent, text="Quit", command=self.quit)
         self.quitbutton.grid(row=3,column=4, sticky=W)
         
-
         # tickbox to autoload existing annotations
         self.ALoad = IntVar()
         self.autoload_annotations = Checkbutton(master=self.parent, 
                                                 text = "Autoload Annotations?", variable=self.ALoad, onvalue = 1, offvalue = 0)
         self.autoload_annotations.grid(row=1, column=3, sticky=W)
-        
-        
+            
         # tickbox to enable discarding labels  
         self.DLabels = IntVar()
         self.discardlabels_check = Checkbutton(master=self.parent, 
                                                 text = "Discard Labels?", variable=self.DLabels, onvalue = 1, offvalue = 0)
         self.discardlabels_check.grid(row=1, column=4, sticky=W)
-        
         
         # init figure for plotting
         fig = plt.figure(figsize=(15,2), dpi=100)
@@ -117,7 +116,7 @@ class Annotator:
         
         toolbarFrame = Frame(master=self.parent)
         toolbarFrame.grid(row=3,column=0, columnspan=5)
-        self.toolbar = NavigationToolbar2TkAgg(self.canvas, toolbarFrame)
+        self.toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
         self.toolbar.update()
 
         self.canvas._tkcanvas.grid(row=2,column=0, columnspan = 5, sticky=W)
@@ -133,21 +132,29 @@ class Annotator:
         
         self.canvas.mpl_connect('release_zoom_event', self.handle_release_zoom)
         cid1 = self.canvas.mpl_connect("button_press_event", self.onclick)
-        cid2 = self.canvas.mpl_connect('playback_move_event', self.playbackMove)
-        self.playbackmoveevent = Event('playback_move_event',self)
         self.parent.bind("<Escape>", self.release_stamp)
         self.parent.bind("x", self.discard_last)
         
         self.p = pyaudio.PyAudio()
         
+        self.parent.bind("<<playbackmove>>",self.playbackMove)
         
+        def callbackstream(in_data, frame_count, time_info, status):
+            self.sem.acquire()
+            data = self.wf.readframes(frame_count)
+            self.parent.event_generate("<<playbackmove>>",when="now")
+            self.sem.release()
+            return (data, pyaudio.paContinue)
+        
+        self._callbackstream = callbackstream
+         
     def set_directory(self):
-        directory = tkFileDialog.askdirectory(initialdir=self.file_opt['initialdir']) + '/'
+        directory = tkFileDialog.askdirectory() + '/'
         self.file_opt['initialdir'] = directory        
         
     def release_stamp(self,event=None):
         self.stamp = -1
-        self.info.set("Cursor")
+        
     def discard_last(self,event=None):  # discard last annotation for current sound. button: X
         self.a.lines.pop()
         self.canvas.draw()
@@ -187,7 +194,6 @@ class Annotator:
         addbutton.grid(row=0, column=1, sticky=W)
         close_button = Button(frame_addlabel, text='close', command=frame_addlabel.destroy)
     
-    
     def quit(self):
         try:
             self.stream.close()
@@ -196,42 +202,44 @@ class Annotator:
         except:
             print("no audio init")
         finally:
-            self.parent.destroy()
+            self.parent.destroy()      
         
-    def initStream(self): 
-        
-        def callbackstream(in_data, frame_count, time_info, status):
-            data = self.wf.readframes(frame_count)
-            self.canvas.callbacks.process('playback_move_event',self.playbackmoveevent)
-            return (data, pyaudio.paContinue)
-        
-        
-        self.stream = self.p.open(format=self.p.get_format_from_width(self.wf.getsampwidth()),
-                        channels=self.wf.getnchannels(),
-                        rate=self.wf.getframerate(),
+    def initStream(self):
+        self.stream = self.p.open(format=8,
+                        channels=1,
+                        rate=44100,
                         output=True,
-                        stream_callback=callbackstream)
+                        stream_callback=self._callbackstream,
+                        start = True,
+                        frames_per_buffer = self.chunk_size)
   
     def playsound(self,event=None):
+        if self.sem.locked():
+            return
         if self.play_mode.get() == True:
-            self.playbutton.config(text="Play")
-            self.stream.close()
-            self.play_mode.set(False)
-
+            try:
+	            self.playbutton.config(text="Play")
+	            self.stream.close()
+	            self.stream.close()
+	            self.play_mode.set(False)
+            except:
+                print("stop failed")
         else:
-            self.initStream()
-            self.new_sound.set(False)
-            self.play_mode.set(True)
-            self.playbutton.config(text="Stop")
-            self.stream.start_stream()
+                try:
+                    self.initStream()
+                    self.play_mode.set(True)
+                    self.playbutton.config(text="Stop")
+                except:
+                    print("stop failed")
+        
     
-    def playbackMove(self,event):
-        self.cursor.set_xdata(self.cursor.get_xdata()+1024)
+    def playbackMove(self,event=None): # move cursor by audio chunk size
+        self.cursor.set_xdata(self.cursor.get_xdata()+self.chunk_size)
         self.updateCursor()
         
     def new_release_zoom(self, *args, **kwargs):
         self.release_zoom_orig(*args, **kwargs)
-        s = 'release_zoom_event'
+        s = 'release_zoom_event'    # TODO: define this event seperately
         event = Event(s, self)
         self.canvas.callbacks.process(s, Event('release_zoom_event', self))                    
     
@@ -244,7 +252,7 @@ class Annotator:
         if (self.toolbar._active == 'ZOOM' or self.toolbar._active == 'PAN'):
             pass
         
-        elif (self.stamp > -1):  ##  TODO: Create a function for this part, Add_new_line
+        elif (self.stamp > -1):  ## Create a function for this part, Add_new_line
             self.stampHistory.append(self.stamp)
             self.timeValues[self.stamp].append(event.xdata)
             self.a.draw_artist(self.a.axvline(x=event.xdata,color=self.colors[self.stamp]))
@@ -256,7 +264,7 @@ class Annotator:
             self.cursor.set_xdata(event.xdata)
             self.wf.setpos(int(event.xdata))
             self.updateCursor()
-    
+            
     def updateCursor(self):
         self.canvas.restore_region(self.background)
         self.a.draw_artist(self.cursor)
@@ -292,7 +300,7 @@ class Annotator:
     def loadAnnotations(self):
         directory = self.file_opt['initialdir'] + self.filename.split('.')[0]
         if not os.path.exists(directory):
-            print("No annotations to load")  # TODO: Pop-up message
+            print("No annotations")   # TODO: message pop-up
         else:
             for x in os.listdir(directory):
                 with open('%s' % x, 'r') as filehandle:
@@ -303,21 +311,23 @@ class Annotator:
         self.drawAllStamps
         
     def getNext(self):
-        self.discard    # delete annotations from previous sound
+        self.discard    # deleting annotations previous sound
         fileList = sorted(os.listdir(self.file_opt['initialdir']))
         nextIndex = fileList.index(self.filename) + 1
         if nextIndex == 0 or nextIndex == len(fileList):
-            print("No more files") # TODO: Pop-up message
+            print("No more files") # TODO: message pop-up
         else:
             self.filename = fileList[nextIndex]
             self.filelocation.delete(0,END)
             self.filelocation.insert(0,self.file_opt['initialdir']+fileList[nextIndex])                      
         self.plot()
     
-    def drawAllStamps(self): # TODO
+    def drawAllStamps(self): 
         pass
 
     def saveAndNext(self):
         self.saveAnnotations()
         self.getNext()
-        self.plot()  
+        self.plot()                     
+        
+    
