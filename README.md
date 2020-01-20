@@ -19,7 +19,7 @@ Ugly
 Not-thread safe: Spamming Play/Stop button very quick may freeze program  
 Home, Backward, Forward buttons are not working due to blitting. Requires a modification in NavigationToolbar2tk (of matplotlib.backends)    
   
-(Done) Loading existing annotations (from folder) is not implemented.  
+(Done) Loading existing annotations (from folder) is ~~not~~ implemented.  
 
 
 __Upcoming:__  
