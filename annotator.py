@@ -105,9 +105,9 @@ class Annotator:
         self.discardlabels_check = Checkbutton(master=self.parent, 
                                                 text = "Discard Labels?", variable=self.DLabels, onvalue = 1, offvalue = 0)
         self.discardlabels_check.grid(row=1, column=4, sticky=W)
-        
+		
         # init figure for plotting
-        fig = plt.figure(figsize=(15,2), dpi=100)
+        fig = plt.figure(figsize=(18,3), dpi=100)
         self.a = fig.add_subplot(111)
         
         self.canvas = FigureCanvasTkAgg(fig, self.parent)
@@ -154,21 +154,21 @@ class Annotator:
         
     def release_stamp(self,event=None):
         self.stamp = -1
+        self.info.set("Cursor")
         
     def discard_last(self,event=None):  # discard last annotation for current sound. button: X
         self.a.lines.pop()
         self.canvas.draw()
         self.background = self.canvas.copy_from_bbox(self.a.bbox)
-        self.timeValues[self.stampHistory].pop()
+        self.timeValues[self.stampHistory[-1]].pop()
         self.stampHistory.pop()
         
     def discard(self):  # discard all annotations.
-        if (self.DLabels.get() == True):
+        if (self.DLabels.get() == True or self.ALoad.get()==True):
             self.labeldict = {}
         self.timeValues = []
         self.stamp = -1
         self.stampHistory = []
-        self.plot()
         
     def label(self,event):
         self.info.set(self.labeldict[int(event.char)-1] + " is selected")
@@ -276,6 +276,7 @@ class Annotator:
         self.filelocation.insert(0,self.file_opt['initialdir']+self.filename)
     
     def plot(self):
+        self.discard()
         inputFile = self.filelocation.get()
         self.wf = wave.open(inputFile,'rb')
         self.x = np.fromstring(self.wf.readframes(self.wf.getnframes()), dtype=np.int16)
@@ -287,10 +288,10 @@ class Annotator:
         self.background = self.canvas.copy_from_bbox(self.a.bbox)
         self.canvaswidget.focus_set()
         if (self.ALoad.get() == 1): 
-            self.loadAnnotations
+            self.loadAnnotations()
                               
     def saveAnnotations(self):
-        directory = self.file_opt['initialdir'] + self.filename.split('.')[0]  # deleting .wav
+        directory = self.file_opt['initialdir'] + "Annotations/" + self.filename.split('.')[0] # deleting .wav
         if not os.path.exists(directory):
             os.makedirs(directory)
         for i in self.labeldict:
@@ -298,20 +299,20 @@ class Annotator:
                 json.dump(self.timeValues[i], filehandle)
     
     def loadAnnotations(self):
-        directory = self.file_opt['initialdir'] + self.filename.split('.')[0]
+        directory = self.file_opt['initialdir'] + "Annotations/" + self.filename.split('.')[0] + "/"
         if not os.path.exists(directory):
             print("No annotations")   # TODO: message pop-up
         else:
             for x in os.listdir(directory):
-                with open('%s' % x, 'r') as filehandle:
+                with open(directory + x, 'r') as filehandle:
                     values = json.load(filehandle)
                     self.labeldict[len(self.labeldict)] = x.split('.')[0]
                     self.timeValues.append(values)
                 
-        self.drawAllStamps
+        self.drawAllStamps()
         
     def getNext(self):
-        self.discard    # deleting annotations previous sound
+        self.discard()    # deleting annotations previous sound
         fileList = sorted(os.listdir(self.file_opt['initialdir']))
         nextIndex = fileList.index(self.filename) + 1
         if nextIndex == 0 or nextIndex == len(fileList):
@@ -323,8 +324,11 @@ class Annotator:
         self.plot()
     
     def drawAllStamps(self): 
-        pass
-
+        for i in self.labeldict:
+            for j in self.timeValues[i]:
+                self.a.draw_artist(self.a.axvline(x=j,color=self.colors[i]))
+        self.canvas.draw()
+        self.background = self.canvas.copy_from_bbox(self.a.bbox)
     def saveAndNext(self):
         self.saveAnnotations()
         self.getNext()
