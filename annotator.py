@@ -15,11 +15,16 @@ from tkinter import messagebox as tkMessageBox
 from matplotlib.backends.backend_tkagg import FigureCanvasTkAgg, NavigationToolbar2Tk
 from matplotlib.backend_bases import Event
 
+from essentia.standard import FrameGenerator
+import libod
+
 class Annotator:
     def __init__(self,parent):
         self.parent = parent
         parent.title("Sound Annotation")
+        self.funclist = {"rms","hfc","complex","complex_phase","flux","superflux","noveltycurve"}
         self.initUI() 
+	    
         
     def initUI(self):
         
@@ -29,7 +34,8 @@ class Annotator:
         self.stampHistory = []
         
         self.chunk_size=2048
-        
+        self.mag = []
+        self.phase = []
         self.sem = asyncio.Semaphore()
 
         # Info text
@@ -66,7 +72,17 @@ class Annotator:
         #BUTTON TO PLOT SOUND FILE
         self.preview = Button(self.parent, text="Plot", command=self.plot, bg="gray30", fg="white")
         self.preview.grid(row=0, column=1, sticky=W)
-               
+		
+		# Dropdown Func Select
+        self.funcname = StringVar()
+        self.funcname.set("Select a function")
+        self.fselect = OptionMenu(self.parent,self.funcname,*self.funclist)
+        self.fselect.grid(row=1, column=1, sticky=W)
+		
+		# Button to apply function
+        self.afuncbtn = Button(self.parent, text="Apply function", command=self.applyfunction) 
+        self.afuncbtn.grid(row=1, column=1,padx=(100,6))
+		
         #BUTTON TO PLAY/STOP , shortcut: spacebar
         self.play_mode = tk.BooleanVar(self.parent, False)
         self.new_sound =tk.BooleanVar(self.parent, False)
@@ -147,7 +163,15 @@ class Annotator:
             return (data, pyaudio.paContinue)
         
         self._callbackstream = callbackstream
-         
+     
+    def applyfunction(self):
+        values = getattr(libod,self.funcname.get())(self.filename)
+        if len(values) ==0:
+            self.info.set("No detections")
+        else:		 
+            self.labeldict[len(self.labeldict)] = self.funcname.get()
+            self.timeValues.append([i * 44100 for i in values])
+            self.drawAllStamps()
     def set_directory(self):
         directory = tkFileDialog.askdirectory() + '/'
         self.file_opt['initialdir'] = directory        
@@ -163,12 +187,17 @@ class Annotator:
         self.timeValues[self.stampHistory[-1]].pop()
         self.stampHistory.pop()
         
-    def discard(self):  # discard all annotations.
+    def discard(self):  # discard all annotations
+        self.timeValues = []
         if (self.DLabels.get() == True or self.ALoad.get()==True):
             self.labeldict = {}
-        self.timeValues = []
+        else:
+            for i in range (len(self.labeldict)):
+                self.timeValues.append([])
         self.stamp = -1
         self.stampHistory = []
+        self.mag = []
+        self.phase = []
         
     def label(self,event):
         self.info.set(self.labeldict[int(event.char)-1] + " is selected")
