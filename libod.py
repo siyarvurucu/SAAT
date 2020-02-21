@@ -1,6 +1,7 @@
+from madmom.features.onsets import SpectralOnsetProcessor, OnsetPeakPickingProcessor, CNNOnsetProcessor, RNNOnsetProcessor
+from madmom.audio.filters import LogarithmicFilterbank
 import numpy as np
-from essentia.standard import *
-#import madmom.audio.signal as signal
+from essentia.standard import MonoLoader,Windowing,Spectrum,RMS,Centroid,FrequencyBands,FrameGenerator,CartesianToPolar,FFT,OnsetDetection,Onsets
 from essentia import array
 
 def hfc(filename):
@@ -52,8 +53,11 @@ def rms(filename):
     return Onsets()(array([features]),[1])
     
 def superflux(filename):
-    audio = MonoLoader(filename=filename, sampleRate=44100)()
-    return SuperFluxExtractor()(audio)
+    sodf = SpectralOnsetProcessor(onset_method='superflux', fps=180,
+                                  filterbank=LogarithmicFilterbank,
+                                  num_bands=24, log=np.log10)
+    return sodf(filename)
+	
 
 def noveltycurve(filename):
     audio = MonoLoader(filename=filename, sampleRate=44100)()
@@ -63,3 +67,25 @@ def noveltycurve(filename):
         band_energy.append(FrequencyBands()(mag))
     novelty = NoveltyCurve()(band_energy)
     return Onsets()(np.array([novelty]),[1])
+ 
+def CNNOnsetDetector(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(CNNOnsetProcessor()(audio))
+    
+def RNNOnsetDetector(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(RNNOnsetProcessor()(audio))
+
+def modifiedKL(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(SpectralOnsetProcessor(onset_method='modified_kullback_leibler')(audio))
+     
+def weightedPhaseDev(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(SpectralOnsetProcessor(onset_method='weighted_phase_deviation')(audio))
+def PhaseDev(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(SpectralOnsetProcessor(onset_method='phase_deviation')(audio))
+def rectifiedComplexDomain(filename):
+     audio = MonoLoader(filename=filename, sampleRate=44100)()
+     return OnsetPeakPickingProcessor()(SpectralOnsetProcessor(onset_method='rectified_complex_domain')(audio))
