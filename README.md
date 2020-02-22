@@ -1,29 +1,17 @@
-# Sound-Annotator
-Python sound annotator
+# Sound Annotation & Analyzation Tool
 
-Create labels using "Add label" button   
-Press numbers on keyboard to select corresponding label    
-Generate time stamps for selected label by clicking on soundwave.  
-Use "Save&Load Next" button to save annotations to text files. It will also load next sound in the folder if there is any.    
-Annotations will be saved in seperate (for each label) .txt files, In JSON string format.  
+With this tool, you can 
+1. Visualize various features of the sound, and use the plots to navigate through and listen the sound.
+2. Annotate sounds manually with time stamps, save or load annotations
+3. Use different detection functions and see the result on the plot
 
-From the toolbar below, use zoom button only. To zoom back, use right-click + drag  
- 
-"1, 2, 3, ..." Select label.  
-"Esc" : Release label  
-Spacebar: Play/Stop  
-"X" Discard last annotations  
+Install PyAudio https://pypi.org/project/PyAudio/
 
-__Issues:__   
-Ugly  
-Not-thread safe: Spamming Play/Stop button very quick may freeze program  
-Home, Backward, Forward buttons are not working due to blitting. Requires a modification in NavigationToolbar2tk (of matplotlib.backends)    
-  
-(Done) Loading existing annotations (from folder) is ~~not~~ implemented.  
+You may need to install portaudio first.
+$ sudo apt-get install portaudio19-dev
+$ pip install pyaudio
 
+Install essentia (https://essentia.upf.edu) and madmom (https://github.com/CPJKU/madmom)
+$ pip install essentia
+$ pip install madmom
 
-__Upcoming:__  
-Use of arrow keys to fine tune timestamps  
-Looping between two time points  
-Spectogram  
-Support other file formats  
