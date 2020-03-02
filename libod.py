@@ -1,7 +1,7 @@
 from madmom.features.onsets import SpectralOnsetProcessor, OnsetPeakPickingProcessor, CNNOnsetProcessor, RNNOnsetProcessor
 from madmom.audio.filters import LogarithmicFilterbank
 import numpy as np
-from essentia.standard import MonoLoader,Windowing,Spectrum,RMS,Centroid,FrequencyBands,FrameGenerator,CartesianToPolar,FFT,OnsetDetection,Onsets
+from essentia.standard import MonoLoader,Windowing,Spectrum,RMS,Centroid,FrequencyBands,FrameGenerator,CartesianToPolar,FFT,OnsetDetection,Onsets, NoveltyCurve
 from essentia import array
 
 def hfc(filename):
@@ -89,3 +89,24 @@ def PhaseDev(filename):
 def rectifiedComplexDomain(filename):
      audio = MonoLoader(filename=filename, sampleRate=44100)()
      return OnsetPeakPickingProcessor()(SpectralOnsetProcessor(onset_method='rectified_complex_domain')(audio))
+
+def ninos(filename,gamma=0.94):
+    """
+    reference: Mounir, M., Karsmakers, P., & Van Waterschoot, T. (2016). Guitar note onset detection based on a spectral sparsity measure. 
+    European Signal Processing Conference. https://doi.org/10.1109/EUSIPCO.2016.7760394
+    """
+    N = 2048
+    hopSize = int(N/10)
+    J = int(N*gamma/2)
+    audio = MonoLoader(filename=filename, sampleRate=44100)()
+    mag = []
+    for frame in FrameGenerator(audio, frameSize = N, hopSize = hopSize):
+        m = CartesianToPolar()(FFT()(Windowing(type='hann')(frame)))[0]
+        m = np.asarray(m)
+        idx = np.argsort(m)[::-1][:J]
+        mag.append(m[idx])
+    mag = np.asarray(mag)
+    x2 = mag*mag
+    inos=np.sum(x2,axis=1)/(np.sum(x2*x2,axis=1)**(0.25))
+    ninos = inos/(J**(0.25))
+    return  OnsetPeakPickingProcessor(threshold=0.03,fps=44100/hopSize)(ninos)                          

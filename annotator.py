@@ -34,13 +34,24 @@ class Annotator:
         
         self.funclist = {"rms","hfc","complex","complex_phase","flux",
         "superflux","noveltycurve","CNNOnsetDetector","RNNOnsetDetector","modifiedKL",
-        "weightedPhaseDev","PhaseDev","rectifiedComplexDomain"}
+        "weightedPhaseDev","PhaseDev","rectifiedComplexDomain","ninos"}
         
         self.featurelist  = ["Audio","rms","spectralCentroid","spectralRolloff","zcr","spectralEntropy",
-        "spectralFlux","CentralMoments","CentroidDecrease","stft"] 
+        "spectralFlux","CentroidDecrease","stft"] 
         self.hopsizes = []
         self.calculated_features_dict = {}
         self.calculated_features = []
+        self.calculated_featuresParams = []
+        
+        self.defaultParams = {'rms': (512, 1024, 'hann'),
+                                'Audio': (),
+                                'spectralCentroid':(512, 1024, 'hann'),
+                                'spectralRolloff':(512, 1024, 'hann'),
+                                'spectralFlux':(512, 1024, 'hann'),
+                                'zcr':(512, 1024),
+                                'spectralEntropy':(512, 1024, 'hann'),
+                                'CentroidDecrease':(512, 1024, 'hann'),
+                                'stft':(512, 1024)}                                           
         
         self.chunk_size=2048
         self.mag = []
@@ -50,14 +61,14 @@ class Annotator:
         # Info text
         self.info = StringVar()
         self.info.set("welcome")        
-        self.info_widget = Message(self.parent, textvariable=self.info, width=150)
-        self.info_widget.grid(row=1,column=2)
+        self.info_widget = Message(self.parent, textvariable=self.info, width=300)
+        self.info_widget.grid(row=0,column=3,sticky=W+N+E+S,rowspan=2)
 
         # define options for opening file
         self.file_opt = options = {}
         options['defaultextension'] = '.wav'
         options['filetypes'] = [('All files', '.*'), ('Wav files', '.wav')]
-        options['initialdir'] = os.getcwd()
+        options['initialdir'] = os.getcwd() + "/sounds"
         if (options['initialdir'][-1] != '/'):
             options['initialdir'] += '/'
         
@@ -86,42 +97,46 @@ class Annotator:
         
         #BUTTON TO draw  stamps
         self.draw = Button(self.parent, text="Draw", command=self.drawAllStamps, bg="gray30", fg="white")
-        self.draw.grid(row=1, column=3, sticky=W, padx=(300,6))
+        self.draw.grid(row=1, column=0, sticky=W, padx=(420,6))
         
 		# Dropdown Function Select
         self.funcname = StringVar()
         self.funcname.set("Select a function")
         self.fselect = OptionMenu(self.parent,self.funcname,*self.funclist)
-        self.fselect.grid(row=1, column=1, sticky=W,padx=(0,6))
+        self.fselect.grid(row=1, column=2, sticky=W)
 		
 		# Button to Apply function
-        self.afuncbtn = Button(self.parent, text="Apply", command=self.applyfunction) 
-        self.afuncbtn.grid(row=1, column=1,padx=(0,6))
+        self.afuncbtn = Button(self.parent, text="Apply", command=self.applyfunction, bg="gray30", fg="white") 
+        self.afuncbtn.grid(row=1, column=2,sticky=W,padx=(300,6))
         
         # Dropdown SHOW FEATURE
         self.featurename = StringVar()
         self.featurename.set("Audio")
+        self.featurename.trace("w", self.changeparams)
         self.ftselect = OptionMenu(self.parent,self.featurename,*self.featurelist)
-        self.ftselect.grid(row=0, column=1, sticky=W)
-        
+        self.ftselect.grid(row=0, column=2, sticky=W)
+        # Entry for feature params
+        self.featureParamsEntry = Entry(self.parent)
+        self.featureParamsEntry.grid(row=0, column=2, sticky=W,padx=(150,6))
+        self.featureParamsEntry.bind("<Enter>",self.updateinfo)                          
         # Button to show  feature
-        self.afuncbtn = Button(self.parent, text="Show Feature", command=self.showfeature) 
-        self.afuncbtn.grid(row=0, column=1, sticky=W,padx=(100,6))
+        self.afuncbtn = Button(self.parent, text="Show", command=self.showfeature, bg="gray30", fg="white") 
+        self.afuncbtn.grid(row=0, column=2, sticky=W,padx=(300,6))
         
         #BUTTON TO PLAY/STOP , shortcut: spacebar
         self.play_mode = tk.BooleanVar(self.parent, False)
         self.new_sound =tk.BooleanVar(self.parent, False)
         self.playbutton = Button(self.parent, text="Play", command=self.playsound)
-        self.playbutton.grid(row=0, column=2, sticky=W)#, padx=(800, 6))
+        self.playbutton.grid(row=0, column=0, sticky=W, padx=(350, 6))
         self.parent.bind("<space>",self.playsound)
         
         #BUTTON TO SAVE AND LOAD NEXT SOUND FILE 
         self.saveload = Button(self.parent, text="Save& Load Next", command=self.saveAndNext) 
-        self.saveload.grid(row=0, column=3, sticky=W)
+        self.saveload.grid(row=0, column=1, sticky=W)
         
         #BUTTON TO ADD LABELS 
-        self.addlabel_button = Button(self.parent, text="Add Labels", command=self.addlabel_gui) 
-        self.addlabel_button.grid(row=0, column=3, sticky=W, padx=(300,6)) 
+        self.addlabel_button = Button(self.parent, text="Add/Manage Labels", command=self.addlabel_gui) 
+        self.addlabel_button.grid(row=0, column=0, sticky=W, padx=(420,6)) 
         
         # BUTTON TO DISCARD CURRENT ANNOTATIONS 
         self.discardbutton = Button(self.parent, text="Discard", command=self.discard)
@@ -136,16 +151,16 @@ class Annotator:
         self.quitbutton.grid(row=3,column=4, sticky=W)
         
         # tickbox to autoload existing annotations
-        self.ALoad = IntVar()
+        self.ALoad = IntVar(value=1)
         self.autoload_annotations = Checkbutton(master=self.parent, 
                                                 text = "Autoload Annotations?", variable=self.ALoad, onvalue = 1, offvalue = 0)
-        self.autoload_annotations.grid(row=1, column=3, sticky=W)
+        self.autoload_annotations.grid(row=1, column=1, sticky=W)
         
         # tickbox to convert time to samples
         self.isTime = IntVar()
         self.timeorsamples = Checkbutton(master=self.parent, 
                                                 text = "time?", variable=self.isTime, onvalue = 1, offvalue = 0)
-        self.timeorsamples.grid(row=1, column=3, sticky=W,padx=(220,6))
+        self.timeorsamples.grid(row=1, column=0, sticky=W,padx=(500,6))
             
         # tickbox to enable discarding labels  
         self.DLabels = IntVar()
@@ -164,11 +179,11 @@ class Annotator:
         self.canvaswidget.grid(row=2,column=0,columnspan=5, sticky=W)
         
         toolbarFrame = Frame(master=self.parent)
-        toolbarFrame.grid(row=3,column=0, columnspan=5)
+        toolbarFrame.grid(row=3,column=0, columnspan=7)
         self.toolbar = NavigationToolbar2Tk(self.canvas, toolbarFrame)
         self.toolbar.update()
 
-        self.canvas._tkcanvas.grid(row=2,column=0, columnspan = 5, sticky=W)
+        self.canvas._tkcanvas.grid(row=2,column=0, columnspan = 7, sticky=W)
         self.background = self.canvas.copy_from_bbox(self.a.bbox)
         self.cursor = self.a.axvline(color="k", animated=True)
         self.cursor.set_xdata(0)
@@ -202,7 +217,10 @@ class Annotator:
         
         self._callbackstream = callbackstream
      
-
+    def updateinfo(self,event,*args):
+        caller = event.widget
+        if str(caller) =='.!entry2':
+            self.info.set(getattr(features,self.featurename.get()).__doc__)    
     def applyfunction(self):
         values = getattr(libod,self.funcname.get())(self.filelocation.get())
         if len(values) ==0:
@@ -244,6 +262,8 @@ class Annotator:
         self.hopsizes = []
         self.calculated_features_dict = {}
         self.calculated_features = []
+        self.calculated_featuresParams = {}
+                                   
         self.currentplot = 0
         
     def label(self,event):
@@ -264,7 +284,7 @@ class Annotator:
             
     def addlabel_gui(self):
         frame_addlabel = Toplevel(master=self.parent)
-        frame_addlabel.geometry("%dx%d%+d%+d" % (300, 33*len(self.labeldict), 200, 200))
+        frame_addlabel.geometry("%dx%d%+d%+d" % (400, 100+33*len(self.labeldict), 200, 200))
         frame_addlabel.title("Add Labels")
         self.newlabel_entry = Entry(frame_addlabel)
         self.newlabel_entry.grid(row = 0, column = 0)
@@ -337,19 +357,19 @@ class Annotator:
         
     def new_release_zoom(self, *args, **kwargs):
         self.release_zoom_orig(*args, **kwargs)
-        s = 'toolbar_event'    # TODO: define this event seperately
+        s = 'toolbar_event' 
         event = Event(s, self)
         self.canvas.callbacks.process(s, Event('toolbar_event', self))
         
     def new_release_pan(self, *args, **kwargs):
         self.release_pan_orig(*args, **kwargs)
-        s = 'toolbar_event'    # TODO: define this event seperately
+        s = 'toolbar_event'
         event = Event(s, self)
         self.canvas.callbacks.process(s, Event('toolbar_event', self))
         
     def new_update_view(self, *args, **kwargs):
         self._update_view_orig(*args, **kwargs)
-        s = 'toolbar_event'    # TODO: define this event seperately
+        s = 'toolbar_event' 
         event = Event(s, self)
         self.canvas.callbacks.process(s, Event('toolbar_event', self)) 
         
@@ -361,7 +381,7 @@ class Annotator:
         if (self.toolbar._active == 'ZOOM' or self.toolbar._active == 'PAN'):
             pass
         
-        elif (self.stamp > -1):  ## Create a function for this part, Add_new_line
+        elif (self.stamp > -1):
             self.stampHistory.append(self.stamp)
             self.timeValues[self.stamp].append(event.xdata*self.hopsizes[self.currentplot])
             self.a.draw_artist(self.a.axvline(x=event.xdata,color=self.colors[self.stamp]))
@@ -383,11 +403,19 @@ class Annotator:
         self.filename = os.path.basename(tkFileDialog.askopenfilename(**self.file_opt))
         self.filelocation.delete(0, END)
         self.filelocation.insert(0,self.file_opt['initialdir']+self.filename)
-
+        
+    def changeparams(self,*args):
+        self.featureParamsEntry.delete(0, END)
+        try:
+            self.featureParamsEntry.insert(0,str(self.defaultParams[self.featurename.get()]))
+        except:
+            print("No default params for selected feature")           
     def showfeature(self):
         self.a.clear()
         featureName = self.featurename.get()
-        if featureName in self.calculated_features_dict:
+        featureParams = eval(self.featureParamsEntry.get())                                                          
+        if featureName in self.calculated_features_dict and self.calculated_featuresParams[featureName] != featureParams:
+        # if a feature is calculated before and params are the same; plot the saved result             
             self.currentplot = self.calculated_features_dict[featureName]
             if len(self.calculated_features[self.currentplot].shape) == 2:
                 ylim = 5000
@@ -402,7 +430,7 @@ class Annotator:
         else:
             self.currentplot = len(self.calculated_features)
             self.calculated_features_dict[featureName] = self.currentplot
-            result, hopSize = getattr(features,featureName)(self.audio)
+            result, hopSize = getattr(features,featureName)(self.audio,featureParams)
             if len(result.shape) == 2:
                 ylim = 5000
                 binToFreq = np.arange(0,ylim,43.066)  # Fs/N
@@ -415,15 +443,15 @@ class Annotator:
             self.calculated_features.append(result)
             self.hopsizes.append(hopSize)
         self.drawAllStamps()
-
+        self.calculated_featuresParams[featureName] = featureParams
     def plot(self):
         self.discard()
         inputFile = self.filelocation.get()
         self.wf = wave.open(inputFile,'rb')
         self.featurename.set("Audio")
-        self.audio = MonoLoader(filename=inputFile, sampleRate=44100)()
-        self.showfeature()   
-        self.cursor.set_xdata(0)        
+        self.audio = MonoLoader(filename=inputFile, sampleRate=44100)()                      
+        self.showfeature()    
+        self.cursor.set_xdata(0)                                                                        
         self.canvaswidget.focus_set()
         if (self.ALoad.get() == 1): 
             self.loadAnnotations()
@@ -439,7 +467,7 @@ class Annotator:
     def loadAnnotations(self):
         directory = self.file_opt['initialdir'] + "Annotations/" + self.filename.split('.')[0] + "/"
         if not os.path.exists(directory):
-            print("No annotations")   # TODO: message pop-up
+            print("No annotations")
         else:
             for x in sorted(os.listdir(directory)):
                 with open(directory + x, 'r') as filehandle:
@@ -453,11 +481,11 @@ class Annotator:
                     self.timeValues.append(values)
         
     def getNext(self):
-        self.discard()    # deleting annotations previous sound
+        self.discard()
         fileList = sorted(os.listdir(self.file_opt['initialdir']))
         nextIndex = fileList.index(self.filename) + 1
         if nextIndex == 0 or nextIndex == len(fileList):
-            print("No more files") # TODO: message pop-up
+            print("No more files")
         else:
             self.filename = fileList[nextIndex]
             self.filelocation.delete(0,END)
@@ -468,7 +496,7 @@ class Annotator:
         try:    
             del self.a.lines[1:]
         except:
-            pass
+            pass                                        
         for i in self.labeldict:
             if self.show[i] .get()== 1:
                 for j in self.timeValues[i]:

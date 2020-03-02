@@ -2,24 +2,25 @@ import essentia.standard as ess
 from essentia.standard import Windowing,Spectrum
 import numpy as np
 
-def Audio(audio):
+def Audio(audio,params):
     return audio,1
 
-def rms(audio):
-    hopSize = 512
-    w = Windowing()
+def rms(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     RMS = ess.RMS()
-    for frame in ess.FrameGenerator(audio, frameSize = 1024, hopSize = hopSize):
+    for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):
         sf = spec(w(frame))
         result.append(RMS(sf))
     return np.asarray(result),hopSize
     
-def spectralCentroid(audio):
-    hopSize = 512
-    frameSize = 1024
-    w = Windowing()
+def spectralCentroid(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     centroid = ess.Centroid(range=int(44100/2))
@@ -28,10 +29,10 @@ def spectralCentroid(audio):
         result.append(centroid(sf))
     return np.asarray(result),hopSize
     
-def spectralRolloff(audio):
-    hopSize = 512
-    frameSize = 1024
-    w = Windowing()
+def spectralRolloff(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     RollOff = ess.RollOff()
@@ -40,19 +41,19 @@ def spectralRolloff(audio):
         result.append(RollOff(sf))
     return np.asarray(result),hopSize
     
-def zcr(audio):
-    hopSize = 512
-    frameSize = 1024
+def zcr(audio,params):
+    """ hop size, frame size """
+    hopSize, frameSize = params
     result = []
     ZCR = ess.ZeroCrossingRate()
     for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):
         result.append(ZCR(frame))
     return np.asarray(result),hopSize
 
-def spectralFlux(audio):
-    hopSize = 512
-    frameSize = 1024
-    w = Windowing()
+def spectralFlux(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     Flux = ess.Flux()
@@ -61,10 +62,10 @@ def spectralFlux(audio):
         result.append(Flux(sf))
     return np.asarray(result),hopSize
     
-def spectralEntropy(audio):
-    hopSize = 512
-    frameSize = 1024
-    w = Windowing()
+def spectralEntropy(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     Entropy = ess.Entropy()
@@ -73,10 +74,10 @@ def spectralEntropy(audio):
         result.append(Entropy(sf))
     return np.asarray(result),hopSize
     
-def CentroidDecrease(audio):
-    hopSize = 512
-    frameSize = 1024
-    w = Windowing()
+def CentroidDecrease(audio,params):
+    """ hop size, frame size, window type """
+    hopSize, frameSize, wtype = params
+    w = Windowing(type=wtype)
     spec = Spectrum()
     result = []
     centroid = ess.Centroid(range=int(44100/2))
@@ -86,9 +87,9 @@ def CentroidDecrease(audio):
         result.append(decrease(sf))
     return np.asarray(result),hopSize
     
-def stft(audio):
-    hopSize = 512
-    frameSize = 1024
+def stft(audio,params): # TODO: add fft size
+    """ hop size, frame size"""
+    hopSize, frameSize = params
     result = []
     for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):
         result.append(ess.FFT()(frame))
