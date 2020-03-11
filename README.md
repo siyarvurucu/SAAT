@@ -1,5 +1,7 @@
 # Sound Annotation & Analyzation Tool
 
+![](image/ss.png)  
+
 With this tool, you can 
 1. Visualize various features of the sound, and use the plots to navigate through and listen the sound.  
 2. Annotate sounds manually with time stamps, save or load annotations  
