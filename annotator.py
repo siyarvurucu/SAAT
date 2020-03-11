@@ -37,7 +37,7 @@ class Annotator:
         "weightedPhaseDev","PhaseDev","rectifiedComplexDomain","ninos"}
         
         self.featurelist  = ["Audio","rms","spectralCentroid","spectralRolloff","zcr","spectralEntropy",
-        "spectralFlux","CentroidDecrease","stft"] 
+        "spectralFlux","StrongDecay","stft"] 
         self.hopsizes = []
         self.calculated_features_dict = {}
         self.calculated_features = []
@@ -50,8 +50,8 @@ class Annotator:
                                 'spectralFlux':(512, 1024, 'hann'),
                                 'zcr':(512, 1024),
                                 'spectralEntropy':(512, 1024, 'hann'),
-                                'CentroidDecrease':(512, 1024, 'hann'),
-                                'stft':(512, 1024)}                                           
+                                'StrongDecay':(512, 1024),
+                                'stft':(512, 1024)}                                          
         
         self.chunk_size=2048
         self.mag = []
@@ -123,6 +123,9 @@ class Annotator:
         self.afuncbtn = Button(self.parent, text="Show", command=self.showfeature, bg="gray30", fg="white") 
         self.afuncbtn.grid(row=0, column=2, sticky=W,padx=(300,6))
         
+        # Button to send top feature to below plot 
+        self.sendbelowbtn = Button(self.parent, text="v", command=self.sendbelow) 
+        self.sendbelowbtn.grid(row=0, column=2, sticky=W,padx=(360,6))                                                   
         #BUTTON TO PLAY/STOP , shortcut: spacebar
         self.play_mode = tk.BooleanVar(self.parent, False)
         self.new_sound =tk.BooleanVar(self.parent, False)
@@ -151,7 +154,7 @@ class Annotator:
         self.quitbutton.grid(row=3,column=4, sticky=W)
         
         # tickbox to autoload existing annotations
-        self.ALoad = IntVar(value=1)
+        self.ALoad = IntVar()
         self.autoload_annotations = Checkbutton(master=self.parent, 
                                                 text = "Autoload Annotations?", variable=self.ALoad, onvalue = 1, offvalue = 0)
         self.autoload_annotations.grid(row=1, column=1, sticky=W)
@@ -171,8 +174,9 @@ class Annotator:
         # init figure for plotting
         self.currentplot = 0
         
-        fig = plt.figure(figsize=(18,3), dpi=100)
-        self.a = fig.add_subplot(111)
+        fig = plt.figure(figsize=(18,7), dpi=100)
+        self.mainplot = fig.add_subplot(211)
+        self.secplot = fig.add_subplot(212)
         
         self.canvas = FigureCanvasTkAgg(fig, self.parent)
         self.canvaswidget = self.canvas.get_tk_widget()
@@ -184,8 +188,8 @@ class Annotator:
         self.toolbar.update()
 
         self.canvas._tkcanvas.grid(row=2,column=0, columnspan = 7, sticky=W)
-        self.background = self.canvas.copy_from_bbox(self.a.bbox)
-        self.cursor = self.a.axvline(color="k", animated=True)
+        self.background = self.canvas.copy_from_bbox(self.mainplot.bbox)
+        self.cursor = self.mainplot.axvline(color="k", animated=True)
         self.cursor.set_xdata(0)
         
         self.colors = ['r','g','c','m','y','#FFBD33','#924A03','#D00000','#D000D0','#6800D0','#095549','b','r','r']
@@ -241,9 +245,9 @@ class Annotator:
         self.info.set("Cursor")
         
     def discard_last(self,event=None):  # discard last annotation for current sound. button: X
-        self.a.lines.pop()
+        self.mainplot.lines.pop()
         self.canvas.draw()
-        self.background = self.canvas.copy_from_bbox(self.a.bbox)
+        self.background = self.canvas.copy_from_bbox(self.mainplot.bbox)
         self.timeValues[self.stampHistory[-1]].pop()
         self.stampHistory.pop()
         
@@ -375,7 +379,7 @@ class Annotator:
         
     def handle_toolbar(self,event):
         self.canvas.draw()
-        self.background = self.canvas.copy_from_bbox(self.a.bbox)          
+        self.background = self.canvas.copy_from_bbox(self.mainplot.bbox)          
             
     def onclick(self,event):
         if (self.toolbar._active == 'ZOOM' or self.toolbar._active == 'PAN'):
@@ -384,9 +388,9 @@ class Annotator:
         elif (self.stamp > -1):
             self.stampHistory.append(self.stamp)
             self.timeValues[self.stamp].append(event.xdata*self.hopsizes[self.currentplot])
-            self.a.draw_artist(self.a.axvline(x=event.xdata,color=self.colors[self.stamp]))
+            self.mainplot.draw_artist(self.mainplot.axvline(x=event.xdata,color=self.colors[self.stamp]))
             self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.a.bbox)
+            self.background = self.canvas.copy_from_bbox(self.mainplot.bbox)
             self.info.set("Cursor")
             self.stamp = -1
         else:
@@ -396,8 +400,8 @@ class Annotator:
             
     def updateCursor(self):
         self.canvas.restore_region(self.background)
-        self.a.draw_artist(self.cursor)
-        self.canvas.blit(self.a.bbox)
+        self.mainplot.draw_artist(self.cursor)
+        self.canvas.blit(self.mainplot.bbox)
         
     def browse_file(self):
         self.filename = os.path.basename(tkFileDialog.askopenfilename(**self.file_opt))
@@ -409,9 +413,10 @@ class Annotator:
         try:
             self.featureParamsEntry.insert(0,str(self.defaultParams[self.featurename.get()]))
         except:
+            self.featureParamsEntry.insert(0,"()")                                      
             print("No default params for selected feature")           
     def showfeature(self):
-        self.a.clear()
+        self.mainplot.clear()
         featureName = self.featurename.get()
         featureParams = eval(self.featureParamsEntry.get())                                                          
         if featureName in self.calculated_features_dict and self.calculated_featuresParams[featureName] != featureParams:
@@ -420,12 +425,12 @@ class Annotator:
             if len(self.calculated_features[self.currentplot].shape) == 2:
                 ylim = 5000
                 binToFreq = np.arange(0,ylim,43.066)  # Fs/N
-                self.a.pcolormesh(np.arange(self.calculated_features[self.currentplot].shape[0]),binToFreq , 
+                self.mainplot.pcolormesh(np.arange(self.calculated_features[self.currentplot].shape[0]),binToFreq , 
                                                 self.calculated_features[self.currentplot].T[:binToFreq.size,:])
             else:
-                self.a.plot(self.calculated_features[self.currentplot])
+                self.mainplot.plot(self.calculated_features[self.currentplot])
             self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.a.bbox) 
+            self.background = self.canvas.copy_from_bbox(self.mainplot.bbox) 
             hopSize = self.hopsizes[self.calculated_features_dict[featureName]]
         else:
             self.currentplot = len(self.calculated_features)
@@ -434,16 +439,27 @@ class Annotator:
             if len(result.shape) == 2:
                 ylim = 5000
                 binToFreq = np.arange(0,ylim,43.066)  # Fs/N
-                self.a.pcolormesh(np.arange(result.shape[0]),binToFreq , 
+                self.mainplot.pcolormesh(np.arange(result.shape[0]),binToFreq , 
                                                 result.T[:binToFreq.size,:])
             else:
-                self.a.plot(result)
+                self.mainplot.plot(result)
             self.canvas.draw()
-            self.background = self.canvas.copy_from_bbox(self.a.bbox) 
+            self.background = self.canvas.copy_from_bbox(self.mainplot.bbox) 
             self.calculated_features.append(result)
             self.hopsizes.append(hopSize)
+            self.calculated_featuresParams[featureName] = featureParams                                                           
         self.drawAllStamps()
-        self.calculated_featuresParams[featureName] = featureParams
+        
+    def sendbelow(self):
+        self.secplot.clear()
+        if len(self.calculated_features[self.currentplot].shape) == 2:
+            ylim = 5000
+            binToFreq = np.arange(0,ylim,43.066)  # Fs/N 
+            self.secplot.pcolormesh(np.arange(self.calculated_features[self.currentplot].shape[0]),binToFreq , 
+                                                self.calculated_features[self.currentplot].T[:binToFreq.size,:])
+        else:
+            self.secplot.plot(self.calculated_features[self.currentplot])
+            self.canvas.draw()                                                                                               
     def plot(self):
         self.discard()
         inputFile = self.filelocation.get()
@@ -494,15 +510,15 @@ class Annotator:
     def drawAllStamps(self):
         hs = self.hopsizes[self.currentplot]
         try:    
-            del self.a.lines[1:]
+            del self.mainplot.lines[1:]
         except:
             pass                                        
         for i in self.labeldict:
             if self.show[i] .get()== 1:
                 for j in self.timeValues[i]:
-                    self.a.draw_artist(self.a.axvline(x=j//hs,color=self.colors[i]))
+                    self.mainplot.draw_artist(self.mainplot.axvline(x=j//hs,color=self.colors[i]))
         self.canvas.draw()
-        self.background = self.canvas.copy_from_bbox(self.a.bbox)
+        self.background = self.canvas.copy_from_bbox(self.mainplot.bbox)
 
     def saveAndNext(self):
         self.saveAnnotations()
