@@ -74,22 +74,19 @@ def spectralEntropy(audio,params):
         result.append(Entropy(sf))
     return np.asarray(result),hopSize
     
-def CentroidDecrease(audio,params):
-    """ hop size, frame size, window type """
-    hopSize, frameSize, wtype = params
-    w = Windowing(type=wtype)
-    spec = Spectrum()
+def StrongDecay(audio,params):
+    """ hop size, frame size """
+    hopSize, frameSize = params                   
     result = []
-    centroid = ess.Centroid(range=int(44100/2))
-    decrease = ess.Decrease(range=int(44100/2))
-    for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):
-        sf = spec(w(frame))
-        result.append(decrease(sf))
+    strongDecay = ess.StrongDecay()                                               
+    for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):                         
+        result.append(strongDecay(frame))
     return np.asarray(result),hopSize
     
 def stft(audio,params): # TODO: add fft size
     """ hop size, frame size"""
-    hopSize, frameSize = params
+    hopSize, frameSize, wtype = params
+                             
     result = []
     for frame in ess.FrameGenerator(audio, frameSize = frameSize, hopSize = hopSize):
         result.append(ess.FFT()(frame))
