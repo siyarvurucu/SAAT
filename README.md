@@ -1,4 +1,4 @@
-# Sound Annotation & Analyzation Tool
+# Sound Annotation & Analysis Tool
 
 ![](image/ss.png)  
 
